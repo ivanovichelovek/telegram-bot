@@ -261,11 +261,12 @@ async def help(update, context):
 async def ifli(update, context):
     if last_img is None:
         await update.message.reply_text("Вы пока не отправляли изображений")
-    try:
-        ret = data[last_img]
-        await update.message.reply_text(ret)
-    except KeyError:
-        await update.message.reply_text("Мы ещё не добавили описание данного фрукта в нашу базу данных")
+    else:
+        try:
+            ret = data[last_img]
+            await update.message.reply_text(ret)
+        except KeyError:
+            await update.message.reply_text("Мы ещё не добавили описание данного фрукта в нашу базу данных")
 
 
 async def start(update, context):
