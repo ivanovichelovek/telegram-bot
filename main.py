@@ -1,6 +1,10 @@
 import logging
+
+import numpy as np
+import requests
 from telegram import ext
 from PIL import Image
+from numpy import asarray
 from config import BOT_TOKEN
 import os
 import tensorflow as tf
@@ -222,29 +226,26 @@ async def take_message(update, context):
     global last_img
     # Проверяем, есть ли в сообщении изображения
     if update.message.photo:
-        print(1)
         # Получаем список объектов PhotoSize, представляющих изображения разных размеров
         photo_sizes = update.message.photo
         # Выбираем из списка объект с максимальным размером (обычно это последний объект в списке)
         photo = photo_sizes[-1]
         # Скачиваем файл изображения
-        file = context.bot.get_file(photo.file_id)
-        file.download()
-        with Image.open(file) as img:
-            width, height = img.size
-            if width != 100 or height != 100:
-                print(3)
-                await update.message.reply_text(
-                    "Размер вашего изображения не соответствует требуемому"
-                )
-            else:
-                print(4)
-                last_img = labels[model.predict(img)]
-                await update.message.reply_text(
-                    f"Ваш фрукт сорее всего {last_img} из известных нашей программе"
-                )
+        file_url = (await context.bot.get_file(photo.file_id)).file_path
+        response = requests.get(file_url)
+        with open('img.jpg', 'wb') as f:
+            f.write(response.content)
+        with Image.open("img.jpg") as img:
+            img = asarray(img.resize((100, 100))) / 255
+            img = np.expand_dims(img, axis=0)
+            print(img.shape)
+            pred = model.predict(img)
+            print(pred.argmax(1))
+            last_img = labels[pred.argmax(1)[0]]
+            await update.message.reply_text(
+                f"Ваш фрукт сорее всего {last_img} из известных нашей программе"
+            )
     else:
-        print(2)
         await update.message.reply_text("Ваше сообщение не является изображением")
 
 
@@ -258,11 +259,13 @@ async def help(update, context):
 
 
 async def ifli(update, context):
+    if last_img is None:
+        await update.message.reply_text("Вы пока не отправляли изображений")
     try:
         ret = data[last_img]
         await update.message.reply_text(ret)
     except KeyError:
-        await update.message.reply_text("Вы пока не отправляли изображений")
+        await update.message.reply_text("Мы ещё не добавили описание данного фрукта в нашу базу данных")
 
 
 async def start(update, context):
@@ -281,7 +284,7 @@ def main():
     application.add_handler(ext.CommandHandler("ifli", ifli))
     application.add_handler(ext.CommandHandler("help", help))
     application.add_handler(
-        ext.MessageHandler(ext.filters.TEXT, take_message)
+        ext.MessageHandler(ext.filters.ALL, take_message)
     )
     application.run_polling()
 
