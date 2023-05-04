@@ -2,13 +2,12 @@ import logging
 
 import numpy as np
 import requests
-from telegram import ext
+from telegram import ext, ReplyKeyboardMarkup
 from PIL import Image
 from numpy import asarray
 from config import BOT_TOKEN
 import os
 import tensorflow as tf
-from livelossplot import PlotLossesKeras
 from inf_of_fr import data
 from config import (
     learning_rate,
@@ -27,7 +26,6 @@ labels = os.listdir(train_dir)
 num_classes = len(labels)
 last_img = None
 
-
 """
 учитывая пути к папкам train и test и соотношение проверки к тестированию, этот метод создает три генератора
 первый - обучающий генератор использует (100 - validation_percent) изображений из обучающего набора
@@ -43,12 +41,12 @@ last_img = None
 
 
 def build_data_generators(
-    train_folder,
-    test_folder,
-    labels=None,
-    image_size=(100, 100),
-    batch_size=50,
-    val_split=0.001,
+        train_folder,
+        test_folder,
+        labels=None,
+        image_size=(100, 100),
+        batch_size=50,
+        val_split=0.001,
 ):
     train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(
         width_shift_range=0.0,
@@ -160,7 +158,7 @@ def network(input_shape, num_classes):
 
 
 def train_and_evaluate_model(
-    model, name="", epochs=25, batch_size=50, verbose=verbose, useCkpt=False
+        model, name="", epochs=25, batch_size=50, verbose=verbose, useCkpt=False
 ):
     model_out_dir = os.path.join(output_dir, name)
     if not os.path.exists(model_out_dir):
@@ -219,6 +217,11 @@ logging.basicConfig(
     level=logging.DEBUG,
 )
 
+reply_keyboard = [['/help'],
+                  ['/start'],
+                  ['/ifli']]
+markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=False)
+
 logger = logging.getLogger(__name__)
 
 
@@ -233,20 +236,20 @@ async def take_message(update, context):
         # Скачиваем файл изображения
         file_url = (await context.bot.get_file(photo.file_id)).file_path
         response = requests.get(file_url)
-        with open('img.jpg', 'wb') as f:
+        with open("img.jpg", "wb") as f:
             f.write(response.content)
         with Image.open("img.jpg") as img:
             img = asarray(img.resize((100, 100))) / 255
             img = np.expand_dims(img, axis=0)
-            print(img.shape)
             pred = model.predict(img)
-            print(pred.argmax(1))
             last_img = labels[pred.argmax(1)[0]]
             await update.message.reply_text(
                 f"Ваш фрукт сорее всего {last_img} из известных нашей программе"
             )
     else:
-        await update.message.reply_text("Ваше сообщение не является изображением")
+        await update.message.reply_text(
+            "Ваше сообщение не является изображением"
+        )
 
 
 async def help(update, context):
@@ -266,7 +269,9 @@ async def ifli(update, context):
             ret = data[last_img]
             await update.message.reply_text(ret)
         except KeyError:
-            await update.message.reply_text("Мы ещё не добавили описание данного фрукта в нашу базу данных")
+            await update.message.reply_text(
+                "Мы ещё не добавили описание данного фрукта в нашу базу данных"
+            )
 
 
 async def start(update, context):
@@ -275,7 +280,8 @@ async def start(update, context):
     await update.message.reply_html(
         rf"Привет {user.mention_html()}! Я бот по определению экзотических фруктов. "
         rf"Отправьте мне изображение фруктов размером 100х100, и я пришлю название этого фрукта и описание!"
-        rf"Для изучения списка комманд напишите /help"
+        rf"Для изучения списка комманд напишите /help",
+        reply_markup=markup
     )
 
 
@@ -284,9 +290,7 @@ def main():
     application.add_handler(ext.CommandHandler("start", start))
     application.add_handler(ext.CommandHandler("ifli", ifli))
     application.add_handler(ext.CommandHandler("help", help))
-    application.add_handler(
-        ext.MessageHandler(ext.filters.ALL, take_message)
-    )
+    application.add_handler(ext.MessageHandler(ext.filters.ALL, take_message))
     application.run_polling()
 
 
